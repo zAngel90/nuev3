@@ -18,10 +18,16 @@ const BOLD_API_KEY = 'zwSnBgN6F1NaDAj8vPQCuiUSFjy214ly-guw0smJdzo';
 
 // Middleware
 app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-bold-signature']
+  origin: true, // Permite cualquier origen
+  credentials: true, // Permite credenciales
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-bold-signature', 'Origin', 'Accept'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range']
 }));
+
+// Middleware para preflight requests
+app.options('*', cors());
+
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 

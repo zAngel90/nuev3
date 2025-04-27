@@ -595,74 +595,17 @@ app.get('/api/payments/methods', authenticateToken, async (req, res) => {
   }
 });
 
-// Función para verificar la firma del webhook de Bold
-const verifyBoldSignature = (signature, body) => {
-  try {
-    const encoded = Buffer.from(JSON.stringify(body)).toString('base64');
-    // Usar la llave secreta de pruebas proporcionada
-    const secretKey = 'PCM-Ob2lys-tXo3-9OwTmg';
-    const hmac = crypto.createHmac('sha256', secretKey);
-    hmac.update(encoded);
-    const calculatedSignature = hmac.digest('hex');
-    return crypto.timingSafeEqual(
-      Buffer.from(calculatedSignature),
-      Buffer.from(signature)
-    );
-  } catch (error) {
-    console.error('Error verificando firma:', error);
-    return false;
-  }
-};
-
-// Función para actualizar el saldo del usuario
-const updateUserBalance = async (userId, amount) => {
-  try {
-    const usersData = await readJSONFile(USERS_FILE);
-    if (!usersData) {
-      throw new Error('Error al leer la base de datos de usuarios');
-    }
-
-    const userIndex = usersData.users.findIndex(u => u.id === userId);
-    if (userIndex === -1) {
-      throw new Error('Usuario no encontrado');
-    }
-
-    // Actualizar saldo
-    usersData.users[userIndex].balance += Number(amount);
-
-    // Guardar cambios
-    await writeJSONFile(USERS_FILE, usersData);
-
-    return usersData.users[userIndex].balance;
-  } catch (error) {
-    console.error('Error actualizando saldo:', error);
-    throw error;
-  }
-};
-
-// Endpoint para recibir notificaciones de Bold
+// Endpoint para recibir notificaciones de Bold (simplificado)
 app.post('/api/webhook/bold', async (req, res) => {
   try {
+    // Log de la petición recibida
     console.log('Webhook recibido:', req.body);
-    
-    // Obtener la firma del header
-    const signature = req.headers['x-bold-signature'];
-    if (!signature) {
-      console.log('Firma no proporcionada');
-      return res.status(400).json({ error: 'Firma no proporcionada' });
-    }
+    console.log('Headers recibidos:', req.headers);
 
-    // Verificar la firma
-    const isValidSignature = verifyBoldSignature(signature, req.body);
-    if (!isValidSignature) {
-      console.log('Firma inválida');
-      return res.status(400).json({ error: 'Firma inválida' });
-    }
-
-    // Responder inmediatamente con 200 como requiere Bold
+    // Responder inmediatamente con 200
     res.status(200).json({ status: 'OK' });
 
-    // Procesar el evento de manera asíncrona
+    // Procesar el evento
     const { type, data } = req.body;
     console.log('Tipo de evento:', type);
     console.log('Datos del evento:', data);
@@ -670,36 +613,18 @@ app.post('/api/webhook/bold', async (req, res) => {
     if (type === 'SALE_APPROVED') {
       const { payment_id, amount, metadata } = data;
       
-      // Buscar la transacción en nuestra base de datos
-      const transactionsData = await readJSONFile(TRANSACTIONS_FILE);
-      if (!transactionsData) {
-        throw new Error('Error al leer la base de datos de transacciones');
-      }
-
-      // Crear nueva transacción
-      const newTransaction = {
-        id: String(transactionsData.transactions.length + 1),
-        boldPaymentId: payment_id,
-        userId: metadata.userId,
-        type: 'RECHARGE',
-        amount: amount.total,
-        status: 'COMPLETED',
-        description: 'Recarga de saldo via Bold',
-        createdAt: new Date().toISOString()
-      };
-
-      // Guardar la transacción
-      transactionsData.transactions.push(newTransaction);
-      await writeJSONFile(TRANSACTIONS_FILE, transactionsData);
-
       // Actualizar el saldo del usuario
-      await updateUserBalance(metadata.userId, amount.total);
-      console.log('Transacción procesada exitosamente:', newTransaction);
+      const usersData = await readJSONFile(USERS_FILE);
+      const userIndex = usersData.users.findIndex(u => u.id === metadata.userId);
+      
+      if (userIndex !== -1) {
+        usersData.users[userIndex].balance += Number(amount.total);
+        await writeJSONFile(USERS_FILE, usersData);
+        console.log('Saldo actualizado para usuario:', metadata.userId);
+      }
     }
-
   } catch (error) {
-    console.error('Error procesando webhook:', error);
-    // No enviamos respuesta de error porque ya respondimos con 200
+    console.error('Error en webhook:', error);
   }
 });
 

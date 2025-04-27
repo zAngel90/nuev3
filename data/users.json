@@ -1,0 +1,24 @@
+{
+  "users": [
+    {
+      "id": "1",
+      "username": "admin",
+      "password": "$2a$10$JJZR38c58gcyNRhRbBl61OPYdfBDDVxL.VD7aBnUr/qSUc0KZTXne",
+      "email": "admin@cyfstore.com",
+      "role": "admin",
+      "balance": 0,
+      "transactions": [],
+      "createdAt": "2024-03-20T00:00:00.000Z"
+    },
+    {
+      "id": "2",
+      "username": "zAngel90",
+      "email": "av020431@gmail.com",
+      "password": "$2a$10$wk4INiGE5v/mt91ZtJqtF.rCnu6J9JRClo6uLQUd0v9B3/SUykA3O",
+      "balance": 0,
+      "transactions": [],
+      "role": "user",
+      "createdAt": "2025-04-26T23:34:29.029Z"
+    }
+  ]
+}

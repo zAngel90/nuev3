@@ -1,0 +1,28 @@
+{
+  "categories": [
+    {
+      "id": "1",
+      "name": "Pases Premium",
+      "slug": "pases-premium",
+      "description": "Acceso exclusivo a contenido premium y beneficios especiales"
+    },
+    {
+      "id": "2",
+      "name": "Coleccionables",
+      "slug": "coleccionables",
+      "description": "Items raros y edición limitada"
+    },
+    {
+      "id": "3",
+      "name": "Skins",
+      "slug": "skins",
+      "description": "Personalizaciones y aspectos únicos"
+    },
+    {
+      "id": "4",
+      "name": "VIP",
+      "slug": "vip",
+      "description": "Beneficios y privilegios exclusivos para miembros VIP"
+    }
+  ]
+} 

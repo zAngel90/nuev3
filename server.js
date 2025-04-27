@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 5000;
 // Bold API Configuration
 const BOLD_API_URL = 'https://integrations.api.bold.co';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
-const BOLD_API_KEY = 'zwSnBgN6F1NaDAj8vPQCuiUSFjy214ly-guw0smJdzo';
+const BOLD_API_KEY = '_qxIfUbK0Tm_P_H3c9o25EqZaAUvKhVvRde10CPlPz4';
 
 // Middleware
 app.use(cors({

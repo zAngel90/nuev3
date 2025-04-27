@@ -624,9 +624,9 @@ app.post('/api/webhook/bold', async (req, res) => {
     console.log('Tipo de evento:', type);
     console.log('Datos del evento:', JSON.stringify(data, null, 2));
 
-    // Verificar que tenemos los metadatos necesarios
-    if (!data.metadata || !data.metadata.username) {
-      console.error('Webhook sin username en metadatos:', data.metadata);
+    // Verificar que tenemos el email del pagador
+    if (!data.payer_email) {
+      console.error('Webhook sin email del pagador');
       return;
     }
 
@@ -638,9 +638,9 @@ app.post('/api/webhook/bold', async (req, res) => {
       return;
     }
 
-    // Buscar el usuario por username en los metadatos
-    let userIndex = usersData.users.findIndex(u => u.username === data.metadata.username);
-    console.log('Buscando usuario con username:', data.metadata.username);
+    // Buscar el usuario por email
+    let userIndex = usersData.users.findIndex(u => u.email === data.payer_email);
+    console.log('Buscando usuario con email:', data.payer_email);
     console.log('Usuario encontrado:', userIndex !== -1 ? 'Sí' : 'No');
 
     // Función auxiliar para crear una transacción
@@ -696,7 +696,7 @@ app.post('/api/webhook/bold', async (req, res) => {
 
         console.log('Transacción completada exitosamente');
       } else {
-        console.error('Usuario no encontrado para el username:', data.metadata.username);
+        console.error('Usuario no encontrado para el email:', data.payer_email);
       }
     } else if (type === 'SALE_REJECTED') {
       console.log('Procesando venta rechazada...');
@@ -720,7 +720,7 @@ app.post('/api/webhook/bold', async (req, res) => {
 
         console.log('Transacción rechazada registrada');
       } else {
-        console.error('Usuario no encontrado para el username:', data.metadata.username);
+        console.error('Usuario no encontrado para el email:', data.payer_email);
       }
     }
     console.log('=================== FIN WEBHOOK ==================\n');

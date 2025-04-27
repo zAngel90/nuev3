@@ -605,9 +605,16 @@ app.get('/api/payments/methods', authenticateToken, async (req, res) => {
 // Endpoint para recibir notificaciones de Bold
 app.post('/api/webhook/bold', async (req, res) => {
   try {
-    // Log de la petición recibida
-    console.log('Webhook recibido:', req.body);
-    console.log('Headers recibidos:', req.headers);
+    // Log detallado de la petición recibida
+    console.log('================== WEBHOOK BOLD ==================');
+    console.log('Headers recibidos:', JSON.stringify(req.headers, null, 2));
+    console.log('Body recibido:', JSON.stringify(req.body, null, 2));
+
+    // Verificar que tenemos los datos necesarios
+    if (!req.body || !req.body.type || !req.body.data) {
+      console.error('Webhook recibido sin datos necesarios');
+      return res.status(400).json({ error: 'Datos incompletos' });
+    }
 
     // Responder inmediatamente con 200
     res.status(200).json({ status: 'OK' });
@@ -615,7 +622,13 @@ app.post('/api/webhook/bold', async (req, res) => {
     // Procesar el evento
     const { type, data } = req.body;
     console.log('Tipo de evento:', type);
-    console.log('Datos del evento:', data);
+    console.log('Datos del evento:', JSON.stringify(data, null, 2));
+
+    // Verificar que tenemos los metadatos necesarios
+    if (!data.metadata || !data.metadata.username) {
+      console.error('Webhook sin username en metadatos:', data.metadata);
+      return;
+    }
 
     const usersData = await readJSONFile(USERS_FILE);
     const transactionsData = await readJSONFile(TRANSACTIONS_FILE);
@@ -625,33 +638,43 @@ app.post('/api/webhook/bold', async (req, res) => {
       return;
     }
 
-    // Función auxiliar para crear una transacción
-    const createTransaction = (status, description) => ({
-      id: String(transactionsData.transactions.length + 1),
-      userId: userIndex !== -1 ? usersData.users[userIndex].id : null,
-      type: 'RECHARGE',
-      amount: Number(data.amount.total),
-      status,
-      paymentId: data.payment_id,
-      reference: data.metadata.reference,
-      description,
-      paymentMethod: data.payment_method,
-      cardInfo: data.card ? {
-        brand: data.card.brand,
-        lastDigits: data.card.masked_pan.slice(-4)
-      } : null,
-      createdAt: new Date().toISOString()
-    });
-
     // Buscar el usuario por username en los metadatos
     let userIndex = usersData.users.findIndex(u => u.username === data.metadata.username);
     console.log('Buscando usuario con username:', data.metadata.username);
+    console.log('Usuario encontrado:', userIndex !== -1 ? 'Sí' : 'No');
+
+    // Función auxiliar para crear una transacción
+    const createTransaction = (status, description) => {
+      const transaction = {
+        id: String(transactionsData.transactions.length + 1),
+        userId: userIndex !== -1 ? usersData.users[userIndex].id : null,
+        type: 'RECHARGE',
+        amount: Number(data.amount.total),
+        status,
+        paymentId: data.payment_id,
+        reference: data.metadata.reference,
+        description,
+        paymentMethod: data.payment_method,
+        cardInfo: data.card ? {
+          brand: data.card.brand,
+          lastDigits: data.card.masked_pan.slice(-4)
+        } : null,
+        createdAt: new Date().toISOString()
+      };
+      console.log('Transacción creada:', JSON.stringify(transaction, null, 2));
+      return transaction;
+    };
 
     if (type === 'SALE_APPROVED') {
+      console.log('Procesando venta aprobada...');
       if (userIndex !== -1) {
         // Actualizar el saldo del usuario
+        const previousBalance = usersData.users[userIndex].balance;
         usersData.users[userIndex].balance += Number(data.amount.total);
-        console.log(`Actualizando saldo del usuario ${usersData.users[userIndex].username} a ${usersData.users[userIndex].balance}`);
+        console.log(`Actualizando saldo del usuario ${usersData.users[userIndex].username}:`);
+        console.log(`- Saldo anterior: ${previousBalance}`);
+        console.log(`- Monto agregado: ${Number(data.amount.total)}`);
+        console.log(`- Nuevo saldo: ${usersData.users[userIndex].balance}`);
 
         // Crear nueva transacción
         const newTransaction = createTransaction('COMPLETED', 'Recarga exitosa');
@@ -664,14 +687,19 @@ app.post('/api/webhook/bold', async (req, res) => {
         usersData.users[userIndex].transactions.push(newTransaction);
 
         // Guardar los cambios
-        await writeJSONFile(USERS_FILE, usersData);
-        await writeJSONFile(TRANSACTIONS_FILE, transactionsData);
+        const savedUser = await writeJSONFile(USERS_FILE, usersData);
+        const savedTransaction = await writeJSONFile(TRANSACTIONS_FILE, transactionsData);
+
+        console.log('Guardado de cambios:');
+        console.log('- Usuario guardado:', savedUser ? 'Éxito' : 'Error');
+        console.log('- Transacción guardada:', savedTransaction ? 'Éxito' : 'Error');
 
         console.log('Transacción completada exitosamente');
       } else {
         console.error('Usuario no encontrado para el username:', data.metadata.username);
       }
     } else if (type === 'SALE_REJECTED') {
+      console.log('Procesando venta rechazada...');
       if (userIndex !== -1) {
         // Crear transacción rechazada
         const rejectedTransaction = createTransaction(
@@ -687,16 +715,18 @@ app.post('/api/webhook/bold', async (req, res) => {
         usersData.users[userIndex].transactions.push(rejectedTransaction);
 
         // Guardar los cambios
-        await writeJSONFile(USERS_FILE, usersData);
-        await writeJSONFile(TRANSACTIONS_FILE, transactionsData);
+        const savedTransaction = await writeJSONFile(TRANSACTIONS_FILE, transactionsData);
+        console.log('Transacción rechazada guardada:', savedTransaction ? 'Éxito' : 'Error');
 
         console.log('Transacción rechazada registrada');
       } else {
         console.error('Usuario no encontrado para el username:', data.metadata.username);
       }
     }
+    console.log('=================== FIN WEBHOOK ==================\n');
   } catch (error) {
     console.error('Error en webhook:', error);
+    // No enviamos respuesta de error porque ya enviamos el 200 OK
   }
 });
 

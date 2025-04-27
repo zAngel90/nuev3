@@ -518,6 +518,13 @@ app.post('/api/payments/create', authenticateToken, async (req, res) => {
     if (!amount || amount < 1000) {
       return res.status(400).json({ error: 'Monto inválido. Mínimo $1,000' });
     }
+
+    // Obtener el username del usuario actual
+    const usersData = await readJSONFile(USERS_FILE);
+    const currentUser = usersData.users.find(u => u.id === req.user.id);
+    if (!currentUser) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
     
     const paymentData = {
       amount_type: "CLOSE",
@@ -529,7 +536,7 @@ app.post('/api/payments/create', authenticateToken, async (req, res) => {
       description: "Recarga de saldo",
       metadata: { 
         reference: 'LNK_' + Math.random().toString(36).substr(2, 9).toUpperCase(),
-        userId: req.user.id,
+        username: currentUser.username, // Guardamos el username en lugar del userId
         type: "RECHARGE"
       },
       payment_methods: ["CREDIT_CARD", "PSE", "NEQUI"]
@@ -595,7 +602,7 @@ app.get('/api/payments/methods', authenticateToken, async (req, res) => {
   }
 });
 
-// Endpoint para recibir notificaciones de Bold (simplificado)
+// Endpoint para recibir notificaciones de Bold
 app.post('/api/webhook/bold', async (req, res) => {
   try {
     // Log de la petición recibida
@@ -610,17 +617,82 @@ app.post('/api/webhook/bold', async (req, res) => {
     console.log('Tipo de evento:', type);
     console.log('Datos del evento:', data);
 
+    const usersData = await readJSONFile(USERS_FILE);
+    const transactionsData = await readJSONFile(TRANSACTIONS_FILE);
+
+    if (!usersData || !transactionsData) {
+      console.error('Error al leer archivos de datos');
+      return;
+    }
+
+    // Función auxiliar para crear una transacción
+    const createTransaction = (status, description) => ({
+      id: String(transactionsData.transactions.length + 1),
+      userId: userIndex !== -1 ? usersData.users[userIndex].id : null,
+      type: 'RECHARGE',
+      amount: Number(data.amount.total),
+      status,
+      paymentId: data.payment_id,
+      reference: data.metadata.reference,
+      description,
+      paymentMethod: data.payment_method,
+      cardInfo: data.card ? {
+        brand: data.card.brand,
+        lastDigits: data.card.masked_pan.slice(-4)
+      } : null,
+      createdAt: new Date().toISOString()
+    });
+
+    // Buscar el usuario por username en los metadatos
+    let userIndex = usersData.users.findIndex(u => u.username === data.metadata.username);
+    console.log('Buscando usuario con username:', data.metadata.username);
+
     if (type === 'SALE_APPROVED') {
-      const { payment_id, amount, metadata } = data;
-      
-      // Actualizar el saldo del usuario
-      const usersData = await readJSONFile(USERS_FILE);
-      const userIndex = usersData.users.findIndex(u => u.id === metadata.userId);
-      
       if (userIndex !== -1) {
-        usersData.users[userIndex].balance += Number(amount.total);
+        // Actualizar el saldo del usuario
+        usersData.users[userIndex].balance += Number(data.amount.total);
+        console.log(`Actualizando saldo del usuario ${usersData.users[userIndex].username} a ${usersData.users[userIndex].balance}`);
+
+        // Crear nueva transacción
+        const newTransaction = createTransaction('COMPLETED', 'Recarga exitosa');
+
+        // Agregar la transacción al historial
+        transactionsData.transactions.push(newTransaction);
+        if (!usersData.users[userIndex].transactions) {
+          usersData.users[userIndex].transactions = [];
+        }
+        usersData.users[userIndex].transactions.push(newTransaction);
+
+        // Guardar los cambios
         await writeJSONFile(USERS_FILE, usersData);
-        console.log('Saldo actualizado para usuario:', metadata.userId);
+        await writeJSONFile(TRANSACTIONS_FILE, transactionsData);
+
+        console.log('Transacción completada exitosamente');
+      } else {
+        console.error('Usuario no encontrado para el username:', data.metadata.username);
+      }
+    } else if (type === 'SALE_REJECTED') {
+      if (userIndex !== -1) {
+        // Crear transacción rechazada
+        const rejectedTransaction = createTransaction(
+          'REJECTED',
+          `Pago rechazado - Código: ${data.bold_code}`
+        );
+
+        // Agregar la transacción rechazada al historial
+        transactionsData.transactions.push(rejectedTransaction);
+        if (!usersData.users[userIndex].transactions) {
+          usersData.users[userIndex].transactions = [];
+        }
+        usersData.users[userIndex].transactions.push(rejectedTransaction);
+
+        // Guardar los cambios
+        await writeJSONFile(USERS_FILE, usersData);
+        await writeJSONFile(TRANSACTIONS_FILE, transactionsData);
+
+        console.log('Transacción rechazada registrada');
+      } else {
+        console.error('Usuario no encontrado para el username:', data.metadata.username);
       }
     }
   } catch (error) {
